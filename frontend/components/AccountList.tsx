@@ -204,6 +204,29 @@ const AccountList: React.FC = () => {
     }
   };
 
+  const handleQuickToggleAI = async (account: AccountDetail) => {
+    setSaving(true);
+    try {
+      const currentSettings = await getAccountAISettings(account.id).catch(() => ({
+        ai_enabled: account.ai_enabled ?? false,
+        max_discount_percent: account.max_discount_percent ?? 10,
+        max_discount_amount: account.max_discount_amount ?? 100,
+        max_bargain_rounds: account.max_bargain_rounds ?? 3,
+        custom_prompts: account.custom_prompts ?? '',
+      }));
+      await updateAccountAISettings(account.id, {
+        ...currentSettings,
+        ai_enabled: !(account.ai_enabled ?? false),
+      });
+      loadAccounts();
+    } catch (error) {
+      console.error('切换AI回复失败:', error);
+      alert('切换AI回复失败，请重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startQRLogin = async () => {
     setShowQRModal(true);
     setQrStatus('loading');
@@ -288,6 +311,19 @@ const AccountList: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+                <button
+                    onClick={() => handleQuickToggleAI(account)}
+                    disabled={saving}
+                    className={`px-4 py-3 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 ${
+                      account.ai_enabled
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700'
+                    } disabled:opacity-60 disabled:cursor-not-allowed`}
+                    title={account.ai_enabled ? '关闭AI自动回复' : '开启AI自动回复'}
+                >
+                    <Bot className="w-4 h-4" />
+                    {account.ai_enabled ? 'AI回复已开' : '开启AI回复'}
+                </button>
                 <button
                     onClick={() => openEditModal(account)}
                     className="p-3 rounded-xl hover:bg-gray-100 transition-colors text-gray-600"
@@ -437,13 +473,13 @@ const AccountList: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditForm({ ...editForm, auto_confirm: !editForm.auto_confirm })}
-                  className={`w-14 h-8 rounded-full transition-colors duration-300 relative ${
+                  className={`ios-switch ${
                     editForm.auto_confirm ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <span
-                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${
-                      editForm.auto_confirm ? 'translate-x-7' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      editForm.auto_confirm ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -511,13 +547,13 @@ const AccountList: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setEditForm({ ...editForm, show_browser: !editForm.show_browser })}
-                      className={`w-14 h-8 rounded-full transition-colors duration-300 relative ${
+                      className={`ios-switch ${
                         editForm.show_browser ? 'bg-[#FFE815]' : 'bg-gray-300'
                       }`}
                     >
                       <span
-                        className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${
-                          editForm.show_browser ? 'translate-x-7' : 'translate-x-1'
+                        className={`ios-switch-thumb ${
+                          editForm.show_browser ? 'ios-switch-thumb-on' : ''
                         }`}
                       />
                     </button>
@@ -554,17 +590,18 @@ const AccountList: React.FC = () => {
       {activeModal === 'ai-settings' && editingAccount && createPortal(
         <div className="modal-overlay-centered">
           <div className="modal-container" style={{maxWidth: '600px'}}>
-            <div className="modal-header">
-              <div>
+            <div className="modal-header flex items-start justify-between gap-4">
+              <div className="min-w-0">
                 <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
                   <Bot className="w-6 h-6 text-purple-500" />
                   AI助手设置
                 </h3>
-                <p className="text-sm text-gray-500 mt-1">{editingAccount.nickname || editingAccount.remark || editingAccount.id}</p>
+                <p className="text-sm text-gray-500 mt-1 truncate">{editingAccount.nickname || editingAccount.remark || editingAccount.id}</p>
               </div>
               <button
                 onClick={() => setActiveModal(null)}
-                className="p-2 rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0"
+                className="w-10 h-10 rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0 inline-flex items-center justify-center"
+                title="关闭"
               >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
@@ -572,8 +609,8 @@ const AccountList: React.FC = () => {
 
             <div className="modal-body space-y-6">
               {/* 启用AI */}
-              <div className="flex items-center justify-between p-4 bg-purple-50 rounded-xl">
-                <div>
+              <div className="flex items-center justify-between gap-4 p-4 bg-purple-50 rounded-xl">
+                <div className="min-w-0 flex-1">
                   <div className="font-bold text-gray-900 flex items-center gap-2">
                     <Bot className="w-4 h-4 text-purple-500" />
                     启用AI自动回复
@@ -583,13 +620,14 @@ const AccountList: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setAiSettings({ ...aiSettings, ai_enabled: !aiSettings.ai_enabled })}
-                  className={`w-14 h-8 rounded-full transition-colors duration-300 relative ${
+                  className={`ios-switch ${
                     aiSettings.ai_enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
+                  title={aiSettings.ai_enabled ? '关闭AI自动回复' : '开启AI自动回复'}
                 >
                   <span
-                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${
-                      aiSettings.ai_enabled ? 'translate-x-7' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      aiSettings.ai_enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>

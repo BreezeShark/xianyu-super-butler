@@ -207,9 +207,9 @@ const Rules: React.FC = () => {
                                   </button>
                                   <button
                                     onClick={() => handleToggleShipping(rule)}
-                                    className={`w-12 h-8 rounded-full relative transition-colors ${rule.enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                                    className={`ios-switch ${rule.enabled ? 'bg-green-500' : 'bg-gray-300'}`}
                                   >
-                                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${rule.enabled ? 'left-5' : 'left-1'}`}></div>
+                                      <div className={`ios-switch-thumb ${rule.enabled ? 'ios-switch-thumb-on' : ''}`}></div>
                                   </button>
                                   <button onClick={() => handleDeleteShipping(rule.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                                       <Trash2 className="w-5 h-5" />
@@ -272,9 +272,9 @@ const Rules: React.FC = () => {
                                   </button>
                                   <button
                                     onClick={() => handleToggleReply(rule)}
-                                    className={`w-12 h-8 rounded-full relative transition-colors ${rule.enabled ? 'bg-green-500' : 'bg-gray-300'}`}
+                                    className={`ios-switch ${rule.enabled ? 'bg-green-500' : 'bg-gray-300'}`}
                                   >
-                                      <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${rule.enabled ? 'left-5' : 'left-1'}`}></div>
+                                      <div className={`ios-switch-thumb ${rule.enabled ? 'ios-switch-thumb-on' : ''}`}></div>
                                   </button>
                                   <button onClick={() => handleDeleteReply(rule.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                                       <Trash2 className="w-5 h-5" />
@@ -357,13 +357,13 @@ const Rules: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditingShippingRule({ ...editingShippingRule, enabled: !editingShippingRule?.enabled })}
-                  className={`w-14 h-8 rounded-full transition-colors duration-300 relative ${
+                  className={`ios-switch ${
                     editingShippingRule?.enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <span
-                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 block ${
-                      editingShippingRule?.enabled ? 'translate-x-7' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      editingShippingRule?.enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -458,13 +458,13 @@ const Rules: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditingReplyRule({ ...editingReplyRule, enabled: !editingReplyRule?.enabled })}
-                  className={`w-14 h-8 rounded-full transition-colors duration-300 relative ${
+                  className={`ios-switch ${
                     editingReplyRule?.enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <span
-                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 block ${
-                      editingReplyRule?.enabled ? 'translate-x-7' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      editingReplyRule?.enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>

@@ -4462,18 +4462,70 @@ def get_item_detail(cookie_id: str, item_id: str, current_user: Dict[str, Any] =
         raise HTTPException(status_code=500, detail=f"获取商品详情失败: {str(e)}")
 
 
-class ItemDetailUpdate(BaseModel):
-    item_detail: str
+class ItemUpsertRequest(BaseModel):
+    item_id: Optional[str] = None
+    item_title: Optional[str] = None
+    item_description: Optional[str] = None
+    item_category: Optional[str] = None
+    item_price: Optional[str] = None
+    item_image: Optional[str] = None
+    item_detail: Optional[str] = None
+    is_multi_spec: Optional[bool] = None
+    multi_quantity_delivery: Optional[bool] = None
+    is_multi_qty_ship: Optional[bool] = None
+
+
+@app.post("/items/{cookie_id}")
+def create_item_info(
+    cookie_id: str,
+    item_data: ItemUpsertRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """手工新增商品信息"""
+    try:
+        user_id = current_user['user_id']
+        from db_manager import db_manager
+        user_cookies = db_manager.get_all_cookies(user_id)
+
+        if cookie_id not in user_cookies:
+            raise HTTPException(status_code=403, detail="无权限操作该Cookie")
+
+        if not item_data.item_id:
+            raise HTTPException(status_code=400, detail="商品ID不能为空")
+
+        success = db_manager.upsert_item_basic_info(
+            cookie_id=cookie_id,
+            item_id=item_data.item_id,
+            item_title=item_data.item_title,
+            item_description=item_data.item_description,
+            item_category=item_data.item_category,
+            item_price=item_data.item_price,
+            item_image=item_data.item_image,
+            item_detail=item_data.item_detail,
+            is_multi_spec=item_data.is_multi_spec,
+            multi_quantity_delivery=(
+                item_data.multi_quantity_delivery
+                if item_data.multi_quantity_delivery is not None
+                else item_data.is_multi_qty_ship
+            ),
+        )
+        if success:
+            return {"message": "商品信息保存成功"}
+        raise HTTPException(status_code=400, detail="保存失败")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"新增商品失败: {str(e)}")
 
 
 @app.put("/items/{cookie_id}/{item_id}")
 def update_item_detail(
     cookie_id: str,
     item_id: str,
-    update_data: ItemDetailUpdate,
+    update_data: ItemUpsertRequest,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """更新商品详情"""
+    """更新商品信息"""
     try:
         # 检查cookie是否属于当前用户
         user_id = current_user['user_id']
@@ -4483,9 +4535,24 @@ def update_item_detail(
         if cookie_id not in user_cookies:
             raise HTTPException(status_code=403, detail="无权限操作该Cookie")
 
-        success = db_manager.update_item_detail(cookie_id, item_id, update_data.item_detail)
+        success = db_manager.upsert_item_basic_info(
+            cookie_id=cookie_id,
+            item_id=item_id,
+            item_title=update_data.item_title,
+            item_description=update_data.item_description,
+            item_category=update_data.item_category,
+            item_price=update_data.item_price,
+            item_image=update_data.item_image,
+            item_detail=update_data.item_detail,
+            is_multi_spec=update_data.is_multi_spec,
+            multi_quantity_delivery=(
+                update_data.multi_quantity_delivery
+                if update_data.multi_quantity_delivery is not None
+                else update_data.is_multi_qty_ship
+            ),
+        )
         if success:
-            return {"message": "商品详情更新成功"}
+            return {"message": "商品信息更新成功"}
         else:
             raise HTTPException(status_code=400, detail="更新失败")
     except HTTPException:

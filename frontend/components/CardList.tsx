@@ -235,12 +235,12 @@ const CardList: React.FC = () => {
                     <td className="px-6 py-5">
                       <button
                         onClick={() => toggleCardStatus(card)}
-                        className={`w-12 h-8 rounded-full relative transition-colors ${
+                        className={`ios-switch ${
                           card.enabled ? 'bg-green-500' : 'bg-gray-300'
                         }`}
                       >
-                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-transform ${
-                          card.enabled ? 'left-5' : 'left-1'
+                        <div className={`ios-switch-thumb ${
+                          card.enabled ? 'ios-switch-thumb-on' : ''
                         }`}></div>
                       </button>
                     </td>
@@ -521,13 +521,13 @@ const CardList: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setEditForm({ ...editForm, enabled: !editForm.enabled })}
-                    className={`w-14 h-8 rounded-full transition-colors duration-300 relative ${
+                    className={`ios-switch ${
                       editForm.enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                     }`}
                   >
                     <span
-                      className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 block ${
-                        editForm.enabled ? 'translate-x-7' : 'translate-x-1'
+                      className={`ios-switch-thumb ${
+                        editForm.enabled ? 'ios-switch-thumb-on' : ''
                       }`}
                     />
                   </button>

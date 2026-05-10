@@ -861,13 +861,13 @@ const Keywords: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDeliveryForm({ ...deliveryForm, enabled: !deliveryForm.enabled })}
-                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
+                  className={`ios-switch ${
                     deliveryForm.enabled ? 'bg-blue-500' : 'bg-gray-300'
                   }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-300 ${
-                      deliveryForm.enabled ? 'translate-x-8' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      deliveryForm.enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -951,13 +951,13 @@ const Keywords: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDefaultForm({ ...defaultForm, enabled: !defaultForm.enabled })}
-                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
+                  className={`ios-switch ${
                     defaultForm.enabled ? 'bg-purple-500' : 'bg-gray-300'
                   }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-300 ${
-                      defaultForm.enabled ? 'translate-x-8' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      defaultForm.enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -986,13 +986,13 @@ const Keywords: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDefaultForm({ ...defaultForm, reply_once: !defaultForm.reply_once })}
-                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 ${
+                  className={`ios-switch ${
                     defaultForm.reply_once ? 'bg-amber-500' : 'bg-gray-300'
                   }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-transform duration-300 ${
-                      defaultForm.reply_once ? 'translate-x-8' : 'translate-x-1'
+                    className={`ios-switch-thumb ${
+                      defaultForm.reply_once ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>

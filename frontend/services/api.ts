@@ -227,7 +227,11 @@ export const getCardDetails = async (cardId: string): Promise<any> => {
 // Items
 export const getItems = async (): Promise<Item[]> => {
     const res = await get<any>('/items');
-    return Array.isArray(res) ? res : (res.items || []);
+    const items = Array.isArray(res) ? res : (res.items || []);
+    return items.map((item: any) => ({
+        ...item,
+        is_multi_qty_ship: item.is_multi_qty_ship ?? item.multi_quantity_delivery ?? false,
+    }));
 }
 
 export const syncItemsFromAccount = async (cookieId: string): Promise<any> => {
@@ -244,6 +248,14 @@ export const createItem = async (cookieId: string, data: any): Promise<any> => {
 
 export const updateItem = async (cookieId: string, itemId: string, data: any): Promise<any> => {
     return put(`/items/${cookieId}/${itemId}`, data);
+}
+
+export const updateItemMultiSpec = async (cookieId: string, itemId: string, isMultiSpec: boolean): Promise<any> => {
+    return put(`/items/${cookieId}/${itemId}/multi-spec`, { is_multi_spec: isMultiSpec });
+}
+
+export const updateItemMultiQuantityDelivery = async (cookieId: string, itemId: string, enabled: boolean): Promise<any> => {
+    return put(`/items/${cookieId}/${itemId}/multi-quantity-delivery`, { multi_quantity_delivery: enabled });
 }
 
 // Rules - 发货规则 (使用正确的后端API)
@@ -350,7 +362,7 @@ export const updateAccountAISettings = async (cookieId: string, settings: Partia
     ai_enabled: settings.ai_enabled ?? false,
     model_name: settings.model_name ?? 'qwen-plus',
     api_key: settings.api_key ?? '',
-    base_url: settings.base_url ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    base_url: settings.base_url ?? '',
     max_discount_percent: settings.max_discount_percent ?? 10,
     max_discount_amount: settings.max_discount_amount ?? 100,
     max_bargain_rounds: settings.max_bargain_rounds ?? 3,

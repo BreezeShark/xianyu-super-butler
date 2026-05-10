@@ -253,7 +253,16 @@ class DBManager:
                 self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_name TEXT DEFAULT ''")
                 self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_phone TEXT DEFAULT ''")
                 self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_address TEXT DEFAULT ''")
+                self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_city TEXT DEFAULT ''")
                 logger.info("orders 表收货人信息列添加完成")
+
+            # 检查并添加收货城市列。部分旧库已有收货人信息列，但缺少城市列。
+            try:
+                self._execute_sql(cursor, "SELECT receiver_city FROM orders LIMIT 1")
+            except sqlite3.OperationalError:
+                logger.info("正在为 orders 表添加 receiver_city 列...")
+                self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_city TEXT DEFAULT ''")
+                logger.info("orders 表 receiver_city 列添加完成")
 
             # 检查并添加 version 列（用于乐观锁）
             try:
@@ -310,6 +319,7 @@ class DBManager:
                 item_description TEXT,
                 item_category TEXT,
                 item_price TEXT,
+                item_image TEXT DEFAULT '',
                 item_detail TEXT,
                 is_multi_spec BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -327,6 +337,14 @@ class DBManager:
                 logger.info("正在为 item_info 表添加 multi_quantity_delivery 列...")
                 self._execute_sql(cursor, "ALTER TABLE item_info ADD COLUMN multi_quantity_delivery BOOLEAN DEFAULT FALSE")
                 logger.info("item_info 表 multi_quantity_delivery 列添加完成")
+
+            # 检查并添加 item_image 列（用于商品列表图片展示和手工维护）
+            try:
+                self._execute_sql(cursor, "SELECT item_image FROM item_info LIMIT 1")
+            except sqlite3.OperationalError:
+                logger.info("正在为 item_info 表添加 item_image 列...")
+                self._execute_sql(cursor, "ALTER TABLE item_info ADD COLUMN item_image TEXT DEFAULT ''")
+                logger.info("item_info 表 item_image 列添加完成")
 
             # 创建自动发货规则表
             cursor.execute('''
@@ -811,6 +829,14 @@ class DBManager:
                     # receiver_address字段不存在，需要添加
                     self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_address TEXT")
                     logger.info("为orders表添加receiver_address字段")
+
+                # 检查orders表是否有receiver_city字段
+                try:
+                    self._execute_sql(cursor, "SELECT receiver_city FROM orders LIMIT 1")
+                except sqlite3.OperationalError:
+                    # receiver_city字段不存在，需要添加
+                    self._execute_sql(cursor, "ALTER TABLE orders ADD COLUMN receiver_city TEXT DEFAULT ''")
+                    logger.info("为orders表添加receiver_city字段")
 
                 # 检查orders表是否有system_shipped字段（系统是否已发货）
                 try:
@@ -1924,7 +1950,14 @@ class DBManager:
                 
                 # 获取系统级别的AI设置作为默认值
                 system_api_key = self.get_system_setting('ai_api_key') or ''
-                system_base_url = self.get_system_setting('ai_api_url') or DEFAULT_BASE_URL
+                system_base_url = (
+                    self.get_system_setting('ai_api_url')
+                    or self.get_system_setting('ai_base_url')
+                    or ''
+                )
+                if not system_base_url and system_api_key.startswith('nvapi-'):
+                    system_base_url = 'https://integrate.api.nvidia.com/v1'
+                system_base_url = system_base_url or DEFAULT_BASE_URL
                 system_model = self.get_system_setting('ai_model') or DEFAULT_MODEL
                 
                 if result:
@@ -3746,9 +3779,60 @@ class DBManager:
 
     # ==================== 商品信息管理 ====================
 
+    def _extract_item_image(self, item_data) -> str:
+        """从闲鱼商品列表/详情结构中提取主图URL。"""
+        if not item_data:
+            return ''
+
+        if isinstance(item_data, str):
+            try:
+                item_data = json.loads(item_data)
+            except Exception:
+                return ''
+
+        if not isinstance(item_data, dict):
+            return ''
+
+        direct_keys = ('item_image', 'image_url', 'pic_url', 'picUrl', 'cover', 'cover_url', 'coverUrl')
+        for key in direct_keys:
+            value = item_data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        pic_info = item_data.get('pic_info') or item_data.get('picInfo') or {}
+        if isinstance(pic_info, dict):
+            for key in ('picUrl', 'pic_url', 'url', 'imageUrl', 'image_url'):
+                value = pic_info.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            for key in ('pics', 'images', 'imageList'):
+                value = pic_info.get(key)
+                if isinstance(value, list):
+                    for entry in value:
+                        if isinstance(entry, str) and entry.strip():
+                            return entry.strip()
+                        if isinstance(entry, dict):
+                            image = self._extract_item_image(entry)
+                            if image:
+                                return image
+
+        for key in ('pics', 'images', 'image_list', 'imageList', 'itemImages'):
+            value = item_data.get(key)
+            if isinstance(value, list):
+                for entry in value:
+                    if isinstance(entry, str) and entry.strip():
+                        return entry.strip()
+                    if isinstance(entry, dict):
+                        image = self._extract_item_image(entry)
+                        if image:
+                            return image
+
+        return ''
+
     def save_item_basic_info(self, cookie_id: str, item_id: str, item_title: str = None,
                             item_description: str = None, item_category: str = None,
-                            item_price: str = None, item_detail: str = None) -> bool:
+                            item_price: str = None, item_detail: str = None,
+                            item_image: str = None) -> bool:
         """保存或更新商品基本信息，使用原子操作避免并发问题
 
         Args:
@@ -3769,12 +3853,13 @@ class DBManager:
 
                 # 使用 INSERT OR IGNORE + UPDATE 的原子操作模式
                 # 首先尝试插入，如果已存在则忽略
+                image = item_image or self._extract_item_image(item_detail)
                 cursor.execute('''
                 INSERT OR IGNORE INTO item_info (cookie_id, item_id, item_title, item_description,
-                                               item_category, item_price, item_detail, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                               item_category, item_price, item_image, item_detail, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ''', (cookie_id, item_id, item_title or '', item_description or '',
-                      item_category or '', item_price or '', item_detail or ''))
+                      item_category or '', item_price or '', image or '', item_detail or ''))
 
                 # 如果是新插入的记录，直接返回成功
                 if cursor.rowcount > 0:
@@ -3802,6 +3887,10 @@ class DBManager:
                 if item_price:
                     update_parts.append("item_price = CASE WHEN (item_price IS NULL OR item_price = '') THEN ? ELSE item_price END")
                     params.append(item_price)
+
+                if image:
+                    update_parts.append("item_image = CASE WHEN (item_image IS NULL OR item_image = '') THEN ? ELSE item_image END")
+                    params.append(image)
 
                 # 对于item_detail，只有在现有值为空时才更新
                 if item_detail:
@@ -4034,6 +4123,57 @@ class DBManager:
             self.conn.rollback()
             return False
 
+    def upsert_item_basic_info(self, cookie_id: str, item_id: str, item_title: str = None,
+                               item_description: str = None, item_category: str = None,
+                               item_price: str = None, item_image: str = None,
+                               item_detail: str = None, is_multi_spec: bool = None,
+                               multi_quantity_delivery: bool = None) -> bool:
+        """新增或覆盖更新商品基础信息，用于管理后台手工维护。"""
+        try:
+            with self.lock:
+                cursor = self.conn.cursor()
+                cursor.execute('''
+                INSERT OR IGNORE INTO item_info (
+                    cookie_id, item_id, item_title, item_description, item_category,
+                    item_price, item_image, item_detail, created_at, updated_at
+                )
+                VALUES (?, ?, '', '', '', '', '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (cookie_id, item_id))
+
+                update_fields = []
+                params = []
+
+                field_values = {
+                    'item_title': item_title,
+                    'item_description': item_description,
+                    'item_category': item_category,
+                    'item_price': item_price,
+                    'item_image': item_image,
+                    'item_detail': item_detail,
+                    'is_multi_spec': int(bool(is_multi_spec)) if is_multi_spec is not None else None,
+                    'multi_quantity_delivery': int(bool(multi_quantity_delivery)) if multi_quantity_delivery is not None else None,
+                }
+
+                for field, value in field_values.items():
+                    if value is not None:
+                        update_fields.append(f"{field} = ?")
+                        params.append(value)
+
+                if update_fields:
+                    update_fields.append("updated_at = CURRENT_TIMESTAMP")
+                    params.extend([cookie_id, item_id])
+                    sql = f"UPDATE item_info SET {', '.join(update_fields)} WHERE cookie_id = ? AND item_id = ?"
+                    self._execute_sql(cursor, sql, params)
+
+                self.conn.commit()
+                logger.info(f"保存商品基础信息成功: {cookie_id} - {item_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"保存商品基础信息失败: {e}")
+            self.conn.rollback()
+            return False
+
     def get_item_multi_quantity_delivery_status(self, cookie_id: str, item_id: str) -> bool:
         """获取商品的多数量发货状态"""
         try:
@@ -4231,6 +4371,7 @@ class DBManager:
                         item_category = item_data.get('item_category', '')
                         item_price = item_data.get('item_price', '')
                         item_detail = item_data.get('item_detail', '')
+                        item_image = item_data.get('item_image', '') or self._extract_item_image(item_data) or self._extract_item_image(item_detail)
 
                         if not cookie_id or not item_id:
                             continue
@@ -4243,10 +4384,10 @@ class DBManager:
                         # 使用 INSERT OR IGNORE + UPDATE 模式
                         cursor.execute('''
                         INSERT OR IGNORE INTO item_info (cookie_id, item_id, item_title, item_description,
-                                                       item_category, item_price, item_detail, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                                       item_category, item_price, item_image, item_detail, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                         ''', (cookie_id, item_id, item_title, item_description,
-                              item_category, item_price, item_detail))
+                              item_category, item_price, item_image, item_detail))
 
                         if cursor.rowcount == 0:
                             # 记录已存在，进行条件更新
@@ -4256,6 +4397,7 @@ class DBManager:
                                 item_description = CASE WHEN (item_description IS NULL OR item_description = '') AND ? != '' THEN ? ELSE item_description END,
                                 item_category = CASE WHEN (item_category IS NULL OR item_category = '') AND ? != '' THEN ? ELSE item_category END,
                                 item_price = CASE WHEN (item_price IS NULL OR item_price = '') AND ? != '' THEN ? ELSE item_price END,
+                                item_image = CASE WHEN (item_image IS NULL OR item_image = '') AND ? != '' THEN ? ELSE item_image END,
                                 item_detail = CASE WHEN (item_detail IS NULL OR item_detail = '' OR TRIM(item_detail) = '') AND ? != '' THEN ? ELSE item_detail END,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE cookie_id = ? AND item_id = ?
@@ -4265,6 +4407,7 @@ class DBManager:
                                 item_description, item_description,
                                 item_category, item_category,
                                 item_price, item_price,
+                                item_image, item_image,
                                 item_detail, item_detail,
                                 cookie_id, item_id
                             ))

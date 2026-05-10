@@ -2821,6 +2821,7 @@ class XianyuLive:
                     'item_description': '',  # 暂时为空
                     'item_category': str(item.get('category_id', '')),
                     'item_price': item.get('price_text', ''),
+                    'item_image': item.get('pic_info', {}).get('picUrl', '') if isinstance(item.get('pic_info'), dict) else '',
                     'item_detail': json.dumps(item_detail, ensure_ascii=False)
                 })
 
@@ -7874,7 +7875,7 @@ class XianyuLive:
             # 如果用户连续发送消息，等待用户停止发送后再回复最后一条消息
             await self._schedule_debounced_reply(
                 chat_id=chat_id,
-                message_data=message_data,
+                message_data=message,
                 websocket=websocket,
                 send_user_name=send_user_name,
                 send_user_id=send_user_id,

@@ -81,13 +81,13 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setSettings({...settings, registration_enabled: !settings.registration_enabled})}
-                  className={`w-14 h-8 rounded-full transition-all relative ${
+                  className={`ios-switch ${
                     settings.registration_enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <div
-                    className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-all shadow-md ${
-                      settings.registration_enabled ? 'left-7' : 'left-1'
+                    className={`ios-switch-thumb ${
+                      settings.registration_enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -100,13 +100,13 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setSettings({...settings, show_default_login_info: !settings.show_default_login_info})}
-                  className={`w-14 h-8 rounded-full transition-all relative ${
+                  className={`ios-switch ${
                     settings.show_default_login_info ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <div
-                    className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-all shadow-md ${
-                      settings.show_default_login_info ? 'left-7' : 'left-1'
+                    className={`ios-switch-thumb ${
+                      settings.show_default_login_info ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -119,13 +119,13 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setSettings({...settings, login_captcha_enabled: !settings.login_captcha_enabled})}
-                  className={`w-14 h-8 rounded-full transition-all relative ${
+                  className={`ios-switch ${
                     settings.login_captcha_enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <div
-                    className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-all shadow-md ${
-                      settings.login_captcha_enabled ? 'left-7' : 'left-1'
+                    className={`ios-switch-thumb ${
+                      settings.login_captcha_enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -138,13 +138,13 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setSettings({...settings, item_sync_enabled: !settings.item_sync_enabled})}
-                  className={`w-14 h-8 rounded-full transition-all relative ${
+                  className={`ios-switch ${
                     settings.item_sync_enabled ? 'bg-[#FFE815]' : 'bg-gray-300'
                   }`}
                 >
                   <div
-                    className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-all shadow-md ${
-                      settings.item_sync_enabled ? 'left-7' : 'left-1'
+                    className={`ios-switch-thumb ${
+                      settings.item_sync_enabled ? 'ios-switch-thumb-on' : ''
                     }`}
                   />
                 </button>
@@ -225,16 +225,22 @@ const Settings: React.FC = () => {
 
               <div className="space-y-3">
                 <label className="block text-sm font-bold text-gray-800">模型</label>
-                <select
-                  value={settings.ai_model || 'qwen-plus'}
+                <input
+                  type="text"
+                  list="ai-model-presets"
+                  value={settings.ai_model ?? 'qwen-plus'}
                   onChange={e => setSettings({...settings, ai_model: e.target.value})}
-                  className="w-full ios-input px-4 py-3 rounded-xl"
-                >
-                  <option value="qwen-plus">通义千问 Plus</option>
-                  <option value="qwen-turbo">通义千问 Turbo</option>
-                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                  <option value="gpt-4">GPT-4</option>
-                </select>
+                  className="w-full ios-input px-4 py-3 rounded-xl font-mono text-sm"
+                  placeholder="例如：minimaxai/minimax-m2.7"
+                />
+                <datalist id="ai-model-presets">
+                  <option value="qwen-plus" label="通义千问 Plus" />
+                  <option value="qwen-turbo" label="通义千问 Turbo" />
+                  <option value="gpt-3.5-turbo" label="GPT-3.5 Turbo" />
+                  <option value="gpt-4" label="GPT-4" />
+                  <option value="minimaxai/minimax-m2.7" label="NVIDIA MiniMax M2.7" />
+                </datalist>
+                <p className="text-xs text-gray-500">支持 OpenAI-compatible 模型名，可直接填写服务商文档中的 model。</p>
               </div>
 
               <div className="space-y-3">
@@ -252,6 +258,7 @@ const Settings: React.FC = () => {
                 <ul className="list-disc list-inside mt-1 space-y-0.5">
                   <li>阿里云通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1</li>
                   <li>OpenAI: https://api.openai.com/v1</li>
+                  <li>NVIDIA NIM: https://integrate.api.nvidia.com/v1</li>
                 </ul>
               </div>
             </div>

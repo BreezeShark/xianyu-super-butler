@@ -185,7 +185,7 @@ def _check_and_install_playwright():
                     playwright_installed = True
                     return True
     
-    # Windows上的常见位置
+    # 各平台上的常见位置
     if sys.platform == 'win32':
         # 用户缓存目录
         user_cache = Path.home() / '.cache' / 'ms-playwright'
@@ -200,6 +200,21 @@ def _check_and_install_playwright():
         appdata = os.getenv('APPDATA')
         if appdata:
             possible_paths.append(Path(appdata) / 'ms-playwright')
+    elif sys.platform == 'darwin':
+        possible_paths.append(Path.home() / 'Library' / 'Caches' / 'ms-playwright')
+    else:
+        possible_paths.append(Path.home() / '.cache' / 'ms-playwright')
+
+    def _find_chromium_executable(chromium_dir: Path):
+        candidates = [
+            chromium_dir / 'chrome-win' / 'chrome.exe',
+            chromium_dir / 'chrome-linux' / 'chrome',
+        ]
+        candidates.extend(chromium_dir.glob('chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'))
+        for candidate in candidates:
+            if candidate.exists() and candidate.stat().st_size > 0:
+                return candidate
+        return None
     
     # 检查是否存在chromium浏览器
     for path in possible_paths:
@@ -208,9 +223,8 @@ def _check_and_install_playwright():
             chromium_dirs = list(path.glob('chromium-*'))
             if chromium_dirs:
                 for chromium_dir in chromium_dirs:
-                    chrome_win = chromium_dir / 'chrome-win'
-                    chrome_exe = chrome_win / 'chrome.exe'
-                    if chrome_exe.exists():
+                    chrome_exe = _find_chromium_executable(chromium_dir)
+                    if chrome_exe:
                         print(f"{_OK} 找到Playwright浏览器: {chrome_exe}")
                         # 设置环境变量
                         os.environ['PLAYWRIGHT_BROWSERS_PATH'] = str(path)
@@ -572,9 +586,8 @@ def _start_api_server():
     """后台线程启动 FastAPI 服务"""
     api_conf = AUTO_REPLY.get('api', {})
 
-    # 优先使用环境变量配置
-    host = os.getenv('API_HOST', '0.0.0.0')  # 默认绑定所有接口
-    port = int(os.getenv('API_PORT', '8080'))  # 默认端口8080
+    host = '0.0.0.0'  # 默认绑定所有接口
+    port = 8080  # 默认端口8080
 
     # 如果配置文件中有特定配置，则使用配置文件
     if 'host' in api_conf:
@@ -589,6 +602,10 @@ def _start_api_server():
         if parsed.hostname and parsed.hostname != 'localhost':
             host = parsed.hostname
         port = parsed.port or 8080
+
+    # 环境变量优先级最高，方便本地开发时覆盖配置文件
+    host = os.getenv('API_HOST', host)
+    port = int(os.getenv('API_PORT', port))
 
     logger.info(f"启动Web服务器: http://{host}:{port}")
     # 在后台线程中创建独立事件循环并直接运行 server.serve()

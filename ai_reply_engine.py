@@ -352,8 +352,22 @@ class AIReplyEngine:
                         return refuse_reply
 
                 # 6. 构建提示词
-                custom_prompts = json.loads(settings['custom_prompts']) if settings['custom_prompts'] else {}
+                custom_prompt_config = settings.get('custom_prompts') or ''
+                custom_prompts = {}
+                plain_custom_prompt = ''
+                if custom_prompt_config:
+                    try:
+                        parsed_prompts = json.loads(custom_prompt_config)
+                        if isinstance(parsed_prompts, dict):
+                            custom_prompts = parsed_prompts
+                        elif isinstance(parsed_prompts, str):
+                            plain_custom_prompt = parsed_prompts.strip()
+                    except json.JSONDecodeError:
+                        plain_custom_prompt = custom_prompt_config.strip()
+
                 system_prompt = custom_prompts.get(intent, self.default_prompts[intent])
+                if plain_custom_prompt:
+                    system_prompt = f"{system_prompt}\n\n额外回复要求：{plain_custom_prompt}"
 
                 # 7. 构建商品信息
                 item_desc = f"商品标题: {item_info.get('title', '未知')}\n"
