@@ -3491,8 +3491,14 @@ class XianyuLive:
             )
 
             if reply:
+                metadata = ai_reply_engine.get_last_reply_metadata(self.cookie_id, chat_id)
                 logger.info(f"【{self.cookie_id}】AI回复生成成功: {reply}")
-                return reply
+                return {
+                    'reply': reply,
+                    'provider_name': metadata.get('provider_name', ''),
+                    'provider_type': metadata.get('provider_type', ''),
+                    'model_name': metadata.get('model_name', ''),
+                }
             else:
                 logger.warning(f"AI回复生成失败")
                 return None
@@ -3512,7 +3518,8 @@ class XianyuLive:
         except:
             return 0.0
 
-    async def send_notification(self, send_user_name: str, send_user_id: str, send_message: str, item_id: str = None, chat_id: str = None):
+    async def send_notification(self, send_user_name: str, send_user_id: str, send_message: str, item_id: str = None, chat_id: str = None,
+                                ai_reply: str = None, ai_provider_name: str = None, ai_model_name: str = None):
         """发送消息通知"""
         try:
             from db_manager import db_manager
@@ -3531,7 +3538,7 @@ class XianyuLive:
 
             # 生成通知的唯一标识（基于消息内容、chat_id、send_user_id）
             # 用于防重复发送
-            notification_key = f"{chat_id or 'unknown'}_{send_user_id}_{send_message}"
+            notification_key = f"{chat_id or 'unknown'}_{send_user_id}_{send_message}_{ai_reply or ''}_{ai_model_name or ''}"
             notification_hash = hashlib.md5(notification_key.encode('utf-8')).hexdigest()
             
             # 使用异步锁保护防重复检查，确保并发安全
@@ -3568,13 +3575,19 @@ class XianyuLive:
             logger.info(f"📱 找到 {len(notifications)} 个通知渠道配置")
 
             # 构建通知消息
-            notification_msg = f"🚨 接收消息通知\n\n" \
+            notification_title = "🤖 AI回复通知" if ai_reply else "🚨 接收消息通知"
+            notification_msg = f"{notification_title}\n\n" \
                              f"账号: {self.cookie_id}\n" \
                              f"买家: {send_user_name} (ID: {send_user_id})\n" \
                              f"商品ID: {item_id or '未知'}\n" \
                              f"聊天ID: {chat_id or '未知'}\n" \
                              f"消息内容: {send_message}\n" \
-                             f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                             f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            if ai_reply:
+                notification_msg += f"\nAI回复: {ai_reply}\n"
+                notification_msg += f"使用供应商: {ai_provider_name or '未知'}\n"
+                notification_msg += f"使用模型: {ai_model_name or '未知'}\n"
+            notification_msg += "\n"
 
             # 发送通知到各个渠道
             for i, notification in enumerate(notifications, 1):
@@ -7282,6 +7295,7 @@ class XianyuLive:
 
             # 记录回复来源
             reply_source = 'API'  # 默认假设是API回复
+            ai_reply_metadata = None
 
             # 如果API回复失败或未启用API，按新的优先级顺序处理
             if not reply:
@@ -7295,8 +7309,10 @@ class XianyuLive:
                     reply_source = '关键词'  # 标记为关键词回复
                 else:
                     # 2. 关键词匹配失败，如果AI开关打开，尝试AI回复
-                    reply = await self.get_ai_reply(send_user_name, send_user_id, send_message, item_id, chat_id)
-                    if reply:
+                    ai_reply_result = await self.get_ai_reply(send_user_name, send_user_id, send_message, item_id, chat_id)
+                    if ai_reply_result:
+                        reply = ai_reply_result.get('reply')
+                        ai_reply_metadata = ai_reply_result
                         reply_source = 'AI'  # 标记为AI回复
                     else:
                         # 3. 最后使用默认回复
@@ -7384,7 +7400,7 @@ class XianyuLive:
 
             # 注意：这里只有商品ID，没有标题和详情，根据新的规则不保存到数据库
             # 商品信息会在其他有完整信息的地方保存（如发货规则匹配时）
-            # 消息通知已在收到消息时立即发送，此处不再重复发送
+            # 普通消息通知已在收到消息时立即发送；AI回复成功后会额外发送带模型信息的通知
 
             # 如果有回复内容，发送消息
             if reply:
@@ -7410,6 +7426,20 @@ class XianyuLive:
                     # 记录发出的消息
                     msg_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                     logger.info(f"[{msg_time}] 【{reply_source}发出】用户: {send_user_name} (ID: {send_user_id}), 商品({item_id}): {reply}")
+                    if reply_source == 'AI' and ai_reply_metadata:
+                        try:
+                            await self.send_notification(
+                                send_user_name,
+                                send_user_id,
+                                send_message,
+                                item_id,
+                                chat_id,
+                                ai_reply=reply,
+                                ai_provider_name=ai_reply_metadata.get('provider_name'),
+                                ai_model_name=ai_reply_metadata.get('model_name'),
+                            )
+                        except Exception as notify_error:
+                            logger.error(f"📱 发送AI回复通知失败: {self._safe_str(notify_error)}")
             else:
                 msg_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
                 logger.info(f"[{msg_time}] 【{self.cookie_id}】【系统】未找到匹配的回复规则，不回复")

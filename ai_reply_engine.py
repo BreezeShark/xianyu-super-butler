@@ -33,6 +33,7 @@ class AIReplyEngine:
         # 用于控制同一chat_id消息的串行处理
         self._chat_locks = {}
         self._chat_locks_lock = threading.Lock()
+        self._last_reply_metadata = {}
     
     def _init_default_prompts(self):
         """初始化默认提示词"""
@@ -346,7 +347,11 @@ class AIReplyEngine:
             temperature=provider_settings['temperature'],
         )
 
-    def _generate_reply_with_fallback(self, settings: dict, messages: list, cookie_id: str) -> str:
+    def _set_last_reply_metadata(self, cookie_id: str, chat_id: str, metadata: dict):
+        self._last_reply_metadata[(cookie_id, chat_id or '')] = dict(metadata)
+        self._last_reply_metadata[(cookie_id, '')] = dict(metadata)
+
+    def _generate_reply_with_fallback(self, settings: dict, messages: list, cookie_id: str, chat_id: str = None) -> str:
         """使用AI供应商降级链生成回复；未配置供应商时回退到旧账号/系统配置。"""
         providers = db_manager.get_ai_providers(enabled_only=True)
         errors = []
@@ -363,6 +368,11 @@ class AIReplyEngine:
                     if self._looks_like_reasoning_reply(reply):
                         raise Exception('AI返回疑似推理过程，已拒绝发送')
                     logger.info(f"【{cookie_id}】AI供应商 {name} 生成成功")
+                    self._set_last_reply_metadata(cookie_id, chat_id, {
+                        'provider_name': name,
+                        'provider_type': provider.get('provider_type') or 'openai',
+                        'model_name': provider.get('model_name') or '',
+                    })
                     return reply.strip()
                 except Exception as e:
                     logger.warning(f"【{cookie_id}】AI供应商 {name} 调用失败，尝试下一个: {e}")
@@ -373,17 +383,39 @@ class AIReplyEngine:
         logger.info(f"【{cookie_id}】未配置AI供应商降级链，使用旧AI配置")
         if self._is_dashscope_api(settings):
             logger.info("使用DashScope API生成回复")
+            self._set_last_reply_metadata(cookie_id, chat_id, {
+                'provider_name': '旧AI配置',
+                'provider_type': 'dashscope',
+                'model_name': settings.get('model_name', ''),
+            })
             return self._call_dashscope_api(settings, messages, max_tokens=100, temperature=0.7)
 
         if self._is_gemini_api(settings):
             logger.info("使用Gemini API生成回复")
+            self._set_last_reply_metadata(cookie_id, chat_id, {
+                'provider_name': '旧AI配置',
+                'provider_type': 'gemini',
+                'model_name': settings.get('model_name', ''),
+            })
             return self._call_gemini_api(settings, messages, max_tokens=100, temperature=0.7)
 
         logger.info("使用OpenAI兼容API生成回复")
         client = self._create_openai_client(cookie_id)
         if not client:
             raise Exception('OpenAI兼容客户端创建失败')
+        self._set_last_reply_metadata(cookie_id, chat_id, {
+            'provider_name': '旧AI配置',
+            'provider_type': 'openai',
+            'model_name': settings.get('model_name', ''),
+        })
         return self._call_openai_api(client, settings, messages, max_tokens=512, temperature=0.7)
+
+    def get_last_reply_metadata(self, cookie_id: str, chat_id: str = None) -> dict:
+        """获取最近一次AI回复使用的模型信息。"""
+        return dict(
+            self._last_reply_metadata.get((cookie_id, chat_id or ''), {})
+            or self._last_reply_metadata.get((cookie_id, ''), {})
+        )
 
     def test_provider(self, provider: dict, message: str = '你好') -> str:
         """测试单个AI供应商配置。"""
@@ -571,7 +603,7 @@ class AIReplyEngine:
                 ]
 
                 logger.info(f"messages:{messages}")
-                reply = self._generate_reply_with_fallback(settings, messages, cookie_id)
+                reply = self._generate_reply_with_fallback(settings, messages, cookie_id, chat_id)
 
                 # 11. 保存AI回复到对话记录
                 if self._looks_like_reasoning_reply(reply):
