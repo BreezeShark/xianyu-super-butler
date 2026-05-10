@@ -4604,6 +4604,20 @@ class AIReplySettings(BaseModel):
     custom_prompts: str = ""
 
 
+class AIProviderConfig(BaseModel):
+    id: Optional[int] = None
+    name: str
+    provider_type: str = "openai"
+    model_name: str
+    api_key: str
+    base_url: str
+    priority: int = 100
+    enabled: bool = True
+    timeout_seconds: int = 30
+    max_tokens: int = 512
+    temperature: float = 0.7
+
+
 @app.delete("/items/batch")
 def batch_delete_items(
     request: BatchDeleteRequest,
@@ -4629,6 +4643,70 @@ def batch_delete_items(
 
 
 # ==================== AI回复管理API ====================
+
+@app.get("/ai-providers")
+def get_ai_providers(_: None = Depends(require_auth)):
+    """获取AI供应商降级配置"""
+    try:
+        return db_manager.get_ai_providers(enabled_only=False)
+    except Exception as e:
+        logger.error(f"获取AI供应商配置异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.post("/ai-providers")
+def create_ai_provider(provider: AIProviderConfig, _: None = Depends(require_auth)):
+    """创建AI供应商配置"""
+    try:
+        data = provider.dict()
+        data.pop('id', None)
+        if not data.get('name') or not data.get('model_name') or not data.get('api_key') or not data.get('base_url'):
+            raise HTTPException(status_code=400, detail="名称、模型、API Key、API地址不能为空")
+
+        provider_id = db_manager.save_ai_provider(data)
+        if not provider_id:
+            raise HTTPException(status_code=400, detail="创建AI供应商失败")
+        return {"message": "AI供应商创建成功", "id": provider_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"创建AI供应商配置异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.put("/ai-providers/{provider_id}")
+def update_ai_provider(provider_id: int, provider: AIProviderConfig, _: None = Depends(require_auth)):
+    """更新AI供应商配置"""
+    try:
+        data = provider.dict()
+        data['id'] = provider_id
+        if not data.get('name') or not data.get('model_name') or not data.get('api_key') or not data.get('base_url'):
+            raise HTTPException(status_code=400, detail="名称、模型、API Key、API地址不能为空")
+
+        saved_id = db_manager.save_ai_provider(data)
+        if not saved_id:
+            raise HTTPException(status_code=400, detail="更新AI供应商失败")
+        return {"message": "AI供应商更新成功", "id": saved_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新AI供应商配置异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.delete("/ai-providers/{provider_id}")
+def delete_ai_provider(provider_id: int, _: None = Depends(require_auth)):
+    """删除AI供应商配置"""
+    try:
+        if db_manager.delete_ai_provider(provider_id):
+            return {"message": "AI供应商删除成功"}
+        raise HTTPException(status_code=404, detail="AI供应商不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除AI供应商配置异常: {e}")
+        raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
 
 @app.get("/ai-reply-settings/{cookie_id}")
 def get_ai_reply_settings(cookie_id: str, current_user: Dict[str, Any] = Depends(get_current_user)):
@@ -4724,9 +4802,10 @@ def test_ai_reply(cookie_id: str, test_data: dict, _: None = Depends(require_aut
 
         # 检查AI设置是否完整
         settings = db_manager.get_ai_reply_settings(cookie_id)
-        if not settings.get('api_key'):
+        enabled_providers = db_manager.get_ai_providers(enabled_only=True)
+        if not enabled_providers and not settings.get('api_key'):
             raise HTTPException(status_code=400, detail='未配置API Key，请先在AI设置中配置API Key')
-        if not settings.get('base_url'):
+        if not enabled_providers and not settings.get('base_url'):
             raise HTTPException(status_code=400, detail='未配置API地址，请先在AI设置中配置API地址')
 
         # 构造测试数据
@@ -5839,7 +5918,7 @@ def get_table_data(table_name: str, admin_user: Dict[str, Any] = Depends(require
         # 验证表名安全性
         allowed_tables = [
             'users', 'cookies', 'cookie_status', 'keywords', 'default_replies', 'default_reply_records',
-            'ai_reply_settings', 'ai_conversations', 'ai_item_cache', 'item_info',
+            'ai_providers', 'ai_reply_settings', 'ai_conversations', 'ai_item_cache', 'item_info',
             'message_notifications', 'cards', 'delivery_rules', 'notification_channels',
             'user_settings', 'system_settings', 'email_verifications', 'captcha_codes', 'orders', "item_replay",
             'risk_control_logs'
@@ -5877,7 +5956,7 @@ def delete_table_record(table_name: str, record_id: str, admin_user: Dict[str, A
         # 验证表名安全性
         allowed_tables = [
             'users', 'cookies', 'cookie_status', 'keywords', 'default_replies', 'default_reply_records',
-            'ai_reply_settings', 'ai_conversations', 'ai_item_cache', 'item_info',
+            'ai_providers', 'ai_reply_settings', 'ai_conversations', 'ai_item_cache', 'item_info',
             'message_notifications', 'cards', 'delivery_rules', 'notification_channels',
             'user_settings', 'system_settings', 'email_verifications', 'captcha_codes', 'orders','item_replay'
         ]
@@ -5917,7 +5996,7 @@ def clear_table_data(table_name: str, admin_user: Dict[str, Any] = Depends(requi
         # 验证表名安全性
         allowed_tables = [
             'cookies', 'cookie_status', 'keywords', 'default_replies', 'default_reply_records',
-            'ai_reply_settings', 'ai_conversations', 'ai_item_cache', 'item_info',
+            'ai_providers', 'ai_reply_settings', 'ai_conversations', 'ai_item_cache', 'item_info',
             'message_notifications', 'cards', 'delivery_rules', 'notification_channels',
             'user_settings', 'system_settings', 'email_verifications', 'captcha_codes', 'orders', 'item_replay',
             'risk_control_logs'

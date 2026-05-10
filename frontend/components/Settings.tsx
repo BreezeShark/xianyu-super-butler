@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { getSystemSettings, updateSystemSettings } from '../services/api';
 import { SystemSettings } from '../types';
 import {
-  Bot, Save, Lock, Sparkles, Mail, Settings as SettingsIcon,
-  Eye, EyeOff, RefreshCw, Database, ToggleLeft, ToggleRight
+  Save, Mail, Settings as SettingsIcon,
+  Eye, EyeOff, RefreshCw, Database, MessageSquare
 } from 'lucide-react';
 
 const Settings: React.FC = () => {
@@ -12,7 +12,6 @@ const Settings: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   // Password visibility states
-  const [showApiKey, setShowApiKey] = useState(false);
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
 
   useEffect(() => {
@@ -181,88 +180,6 @@ const Settings: React.FC = () => {
             </div>
           </section>
 
-          {/* AI Configuration */}
-          <section className="space-y-4">
-            <h3 className="text-lg font-extrabold text-gray-800 flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-[#FFE815] text-black">
-                    <Sparkles className="w-4 h-4" />
-                </div>
-                AI 智能回复配置
-            </h3>
-
-            <div className="ios-card rounded-[2rem] p-6 bg-white space-y-6">
-              <div className="space-y-3">
-                <label className="block text-sm font-bold text-gray-800">API 地址</label>
-                <input
-                  type="text"
-                  value={settings.ai_api_url || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}
-                  onChange={e => setSettings({...settings, ai_api_url: e.target.value})}
-                  className="w-full ios-input px-4 py-3 rounded-xl text-sm"
-                  placeholder="https://api.openai.com/v1"
-                />
-                <p className="text-xs text-gray-500">无需补全 /chat/completions</p>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-bold text-gray-800">API Key</label>
-                <div className="relative">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={settings.ai_api_key || ''}
-                    onChange={e => setSettings({...settings, ai_api_key: e.target.value})}
-                    className="w-full ios-input px-4 py-3 pr-12 rounded-xl font-mono text-sm"
-                    placeholder="sk-..."
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-bold text-gray-800">模型</label>
-                <input
-                  type="text"
-                  list="ai-model-presets"
-                  value={settings.ai_model ?? 'qwen-plus'}
-                  onChange={e => setSettings({...settings, ai_model: e.target.value})}
-                  className="w-full ios-input px-4 py-3 rounded-xl font-mono text-sm"
-                  placeholder="例如：minimaxai/minimax-m2.7"
-                />
-                <datalist id="ai-model-presets">
-                  <option value="qwen-plus" label="通义千问 Plus" />
-                  <option value="qwen-turbo" label="通义千问 Turbo" />
-                  <option value="gpt-3.5-turbo" label="GPT-3.5 Turbo" />
-                  <option value="gpt-4" label="GPT-4" />
-                  <option value="minimaxai/minimax-m2.7" label="NVIDIA MiniMax M2.7" />
-                </datalist>
-                <p className="text-xs text-gray-500">支持 OpenAI-compatible 模型名，可直接填写服务商文档中的 model。</p>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-sm font-bold text-gray-800">默认自动回复内容</label>
-                <textarea
-                  className="w-full ios-input px-4 py-3 rounded-xl min-h-[100px] text-sm resize-none"
-                  value={settings.default_reply || ''}
-                  onChange={e => setSettings({...settings, default_reply: e.target.value})}
-                  placeholder="设置默认的自动回复内容..."
-                ></textarea>
-              </div>
-
-              <div className="p-3 bg-amber-50 rounded-xl text-xs text-amber-700">
-                <strong>常见 AI 服务:</strong>
-                <ul className="list-disc list-inside mt-1 space-y-0.5">
-                  <li>阿里云通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1</li>
-                  <li>OpenAI: https://api.openai.com/v1</li>
-                  <li>NVIDIA NIM: https://integrate.api.nvidia.com/v1</li>
-                </ul>
-              </div>
-            </div>
-          </section>
         </div>
 
         {/* Right Column */}
@@ -344,6 +261,26 @@ const Settings: React.FC = () => {
                   className="w-full ios-input px-4 py-3 rounded-xl text-sm"
                 />
               </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-lg font-extrabold text-gray-800 flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600">
+                    <MessageSquare className="w-4 h-4" />
+                </div>
+                默认自动回复
+            </h3>
+
+            <div className="ios-card rounded-[2rem] p-6 bg-white space-y-3">
+              <label className="block text-sm font-bold text-gray-800">默认回复内容</label>
+              <textarea
+                className="w-full ios-input px-4 py-3 rounded-xl min-h-[120px] text-sm resize-none"
+                value={settings.default_reply || ''}
+                onChange={e => setSettings({...settings, default_reply: e.target.value})}
+                placeholder="设置全局默认自动回复内容..."
+              />
+              <p className="text-xs text-gray-500">AI 和关键词都未命中时，可用默认回复兜底；账号级默认回复仍以账号配置为准。</p>
             </div>
           </section>
         </div>

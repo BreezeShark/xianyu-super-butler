@@ -2,7 +2,7 @@ import { get, post, put, del } from '../lib/request';
 import {
   LoginResponse, AccountDetail, Order, PaginatedResponse,
   AdminStats, Card, SystemSettings, ApiResponse, OrderAnalytics,
-  Item, AIReplySettings, ShippingRule, ReplyRule, DefaultReply
+  Item, AIReplySettings, ShippingRule, ReplyRule, DefaultReply, AIProviderConfig
 } from '../types';
 
 // Auth
@@ -379,6 +379,22 @@ export const testAIConnection = async (cookieId: string): Promise<ApiResponse> =
     return { success: true, message: `AI 回复: ${result.reply}` };
   }
   return { success: result.success ?? true, message: result.message || 'AI 连接测试成功' };
+}
+
+export const getAIProviders = async (): Promise<AIProviderConfig[]> => {
+  return get('/ai-providers');
+}
+
+export const createAIProvider = async (provider: AIProviderConfig): Promise<ApiResponse> => {
+  return post('/ai-providers', provider);
+}
+
+export const updateAIProvider = async (providerId: number, provider: AIProviderConfig): Promise<ApiResponse> => {
+  return put(`/ai-providers/${providerId}`, provider);
+}
+
+export const deleteAIProvider = async (providerId: number): Promise<ApiResponse> => {
+  return del(`/ai-providers/${providerId}`);
 }
 
 // Notification Channels

@@ -165,6 +165,25 @@ class DBManager:
             )
             ''')
 
+            # 创建AI供应商配置表，用于多API降级策略
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ai_providers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                provider_type TEXT DEFAULT 'openai',
+                model_name TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                base_url TEXT NOT NULL,
+                priority INTEGER DEFAULT 100,
+                enabled BOOLEAN DEFAULT TRUE,
+                timeout_seconds INTEGER DEFAULT 30,
+                max_tokens INTEGER DEFAULT 512,
+                temperature REAL DEFAULT 0.7,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+
             # 创建AI对话历史表
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS ai_conversations (
@@ -1896,6 +1915,102 @@ class DBManager:
                 return {}
 
     # -------------------- AI回复设置操作 --------------------
+    def get_ai_providers(self, enabled_only: bool = False) -> List[Dict[str, Any]]:
+        """获取AI供应商配置，按优先级排序"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                sql = '''
+                SELECT id, name, provider_type, model_name, api_key, base_url,
+                       priority, enabled, timeout_seconds, max_tokens, temperature,
+                       created_at, updated_at
+                FROM ai_providers
+                '''
+                params = []
+                if enabled_only:
+                    sql += ' WHERE enabled = 1'
+                sql += ' ORDER BY priority ASC, id ASC'
+                cursor.execute(sql, params)
+
+                providers = []
+                for row in cursor.fetchall():
+                    providers.append({
+                        'id': row[0],
+                        'name': row[1],
+                        'provider_type': row[2] or 'openai',
+                        'model_name': row[3],
+                        'api_key': row[4],
+                        'base_url': row[5],
+                        'priority': row[6],
+                        'enabled': bool(row[7]),
+                        'timeout_seconds': row[8],
+                        'max_tokens': row[9],
+                        'temperature': row[10],
+                        'created_at': row[11],
+                        'updated_at': row[12],
+                    })
+                return providers
+            except Exception as e:
+                logger.error(f"获取AI供应商配置失败: {e}")
+                return []
+
+    def save_ai_provider(self, provider: Dict[str, Any]) -> Optional[int]:
+        """新增或更新AI供应商配置"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                provider_id = provider.get('id')
+                values = (
+                    provider.get('name', '').strip(),
+                    provider.get('provider_type', 'openai'),
+                    provider.get('model_name', '').strip(),
+                    provider.get('api_key', '').strip(),
+                    provider.get('base_url', '').strip(),
+                    int(provider.get('priority', 100)),
+                    bool(provider.get('enabled', True)),
+                    int(provider.get('timeout_seconds', 30)),
+                    int(provider.get('max_tokens', 512)),
+                    float(provider.get('temperature', 0.7)),
+                )
+
+                if provider_id:
+                    cursor.execute('''
+                    UPDATE ai_providers
+                    SET name = ?, provider_type = ?, model_name = ?, api_key = ?, base_url = ?,
+                        priority = ?, enabled = ?, timeout_seconds = ?, max_tokens = ?,
+                        temperature = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    ''', values + (provider_id,))
+                    saved_id = int(provider_id)
+                else:
+                    cursor.execute('''
+                    INSERT INTO ai_providers
+                    (name, provider_type, model_name, api_key, base_url, priority,
+                     enabled, timeout_seconds, max_tokens, temperature)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', values)
+                    saved_id = cursor.lastrowid
+
+                self.conn.commit()
+                return saved_id
+            except Exception as e:
+                logger.error(f"保存AI供应商配置失败: {e}")
+                self.conn.rollback()
+                return None
+
+    def delete_ai_provider(self, provider_id: int) -> bool:
+        """删除AI供应商配置"""
+        with self.lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("DELETE FROM ai_providers WHERE id = ?", (provider_id,))
+                self.conn.commit()
+                return cursor.rowcount > 0
+            except Exception as e:
+                logger.error(f"删除AI供应商配置失败: {e}")
+                self.conn.rollback()
+                return False
+
     def save_ai_reply_settings(self, cookie_id: str, settings: dict) -> bool:
         """保存AI回复设置"""
         with self.lock:

@@ -192,6 +192,22 @@ export interface AIReplySettings {
   custom_prompts: string;
 }
 
+export interface AIProviderConfig {
+  id?: number;
+  name: string;
+  provider_type: 'openai' | 'dashscope' | 'gemini' | string;
+  model_name: string;
+  api_key: string;
+  base_url: string;
+  priority: number;
+  enabled: boolean;
+  timeout_seconds: number;
+  max_tokens: number;
+  temperature: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Default Reply
 export interface DefaultReply {
   cookie_id: string;

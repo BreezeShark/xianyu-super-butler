@@ -81,6 +81,23 @@ class AIReplyEngine:
             logger.error(f"创建OpenAI客户端失败 {cookie_id}: {e}")
             return None
 
+    def _create_openai_client_from_settings(self, settings: dict, label: str) -> Optional[OpenAI]:
+        """根据指定配置创建OpenAI兼容客户端。"""
+        if not settings.get('api_key') or not settings.get('base_url'):
+            return None
+
+        try:
+            api_key = settings.get('api_key', '')
+            logger.info(f"创建OpenAI客户端实例 {label}: base_url={settings.get('base_url')}, api_key={'***' + api_key[-4:] if api_key else 'None'}")
+            return OpenAI(
+                api_key=api_key,
+                base_url=settings.get('base_url'),
+                timeout=settings.get('timeout_seconds', 30),
+            )
+        except Exception as e:
+            logger.error(f"创建OpenAI客户端失败 {label}: {e}")
+            return None
+
     def _is_dashscope_api(self, settings: dict) -> bool:
         """判断是否为DashScope API - 只有选择自定义模型时才使用"""
         model_name = settings.get('model_name', '')
@@ -278,8 +295,8 @@ class AIReplyEngine:
             response = client.chat.completions.create(
                 model=settings['model_name'],
                 messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature
+                max_tokens=settings.get('max_tokens', max_tokens),
+                temperature=settings.get('temperature', temperature)
             )
             return self._extract_openai_reply_text(response)
         except Exception as e:
@@ -289,6 +306,84 @@ class AIReplyEngine:
                 logger.error(f"响应状态码: {getattr(e.response, 'status_code', 'unknown')}")
                 logger.error(f"响应内容: {getattr(e.response, 'text', 'unknown')}")
             raise
+
+    def _call_provider(self, provider: dict, messages: list) -> str:
+        """按供应商配置调用AI。"""
+        provider_settings = {
+            'model_name': provider.get('model_name'),
+            'api_key': provider.get('api_key'),
+            'base_url': provider.get('base_url'),
+            'max_tokens': provider.get('max_tokens', 512),
+            'temperature': provider.get('temperature', 0.7),
+            'timeout_seconds': provider.get('timeout_seconds', 30),
+        }
+        provider_type = (provider.get('provider_type') or 'openai').lower()
+
+        if provider_type == 'gemini' or self._is_gemini_api(provider_settings):
+            return self._call_gemini_api(
+                provider_settings,
+                messages,
+                max_tokens=provider_settings['max_tokens'],
+                temperature=provider_settings['temperature'],
+            )
+
+        if provider_type == 'dashscope' and self._is_dashscope_api(provider_settings):
+            return self._call_dashscope_api(
+                provider_settings,
+                messages,
+                max_tokens=provider_settings['max_tokens'],
+                temperature=provider_settings['temperature'],
+            )
+
+        client = self._create_openai_client_from_settings(provider_settings, provider.get('name', 'AI供应商'))
+        if not client:
+            raise Exception('AI供应商客户端创建失败')
+        return self._call_openai_api(
+            client,
+            provider_settings,
+            max_tokens=provider_settings['max_tokens'],
+            messages=messages,
+            temperature=provider_settings['temperature'],
+        )
+
+    def _generate_reply_with_fallback(self, settings: dict, messages: list, cookie_id: str) -> str:
+        """使用AI供应商降级链生成回复；未配置供应商时回退到旧账号/系统配置。"""
+        providers = db_manager.get_ai_providers(enabled_only=True)
+        errors = []
+
+        if providers:
+            logger.info(f"【{cookie_id}】使用AI降级策略，启用供应商数量: {len(providers)}")
+            for provider in providers:
+                name = provider.get('name') or f"provider-{provider.get('id')}"
+                try:
+                    logger.info(f"【{cookie_id}】尝试AI供应商: {name}, priority={provider.get('priority')}")
+                    reply = self._call_provider(provider, messages)
+                    if not reply or not reply.strip():
+                        raise Exception('AI返回为空')
+                    if self._looks_like_reasoning_reply(reply):
+                        raise Exception('AI返回疑似推理过程，已拒绝发送')
+                    logger.info(f"【{cookie_id}】AI供应商 {name} 生成成功")
+                    return reply.strip()
+                except Exception as e:
+                    logger.warning(f"【{cookie_id}】AI供应商 {name} 调用失败，尝试下一个: {e}")
+                    errors.append(f"{name}: {e}")
+
+            raise Exception("所有AI供应商均调用失败: " + " | ".join(errors))
+
+        logger.info(f"【{cookie_id}】未配置AI供应商降级链，使用旧AI配置")
+        if self._is_dashscope_api(settings):
+            logger.info("使用DashScope API生成回复")
+            return self._call_dashscope_api(settings, messages, max_tokens=100, temperature=0.7)
+
+        if self._is_gemini_api(settings):
+            logger.info("使用Gemini API生成回复")
+            return self._call_gemini_api(settings, messages, max_tokens=100, temperature=0.7)
+
+        logger.info("使用OpenAI兼容API生成回复")
+        client = self._create_openai_client(cookie_id)
+        if not client:
+            raise Exception('OpenAI兼容客户端创建失败')
+        return self._call_openai_api(client, settings, messages, max_tokens=512, temperature=0.7)
 
     def is_ai_enabled(self, cookie_id: str) -> bool:
         """检查指定账号是否启用AI回复"""
@@ -456,24 +551,8 @@ class AIReplyEngine:
                     {"role": "user", "content": user_prompt}
                 ]
 
-                reply = None # 初始化 reply 变量
-
-                if self._is_dashscope_api(settings):
-                    logger.info(f"使用DashScope API生成回复")
-                    reply = self._call_dashscope_api(settings, messages, max_tokens=100, temperature=0.7)
-                
-                elif self._is_gemini_api(settings):
-                    logger.info(f"使用Gemini API生成回复")
-                    reply = self._call_gemini_api(settings, messages, max_tokens=100, temperature=0.7)
-                
-                else:
-                    logger.info(f"使用OpenAI兼容API生成回复")
-                    # 修复 P0-2: 调用已修改的无状态客户端创建方法
-                    client = self._create_openai_client(cookie_id)
-                    if not client:
-                        return None
-                    logger.info(f"messages:{messages}")
-                    reply = self._call_openai_api(client, settings, messages, max_tokens=512, temperature=0.7)
+                logger.info(f"messages:{messages}")
+                reply = self._generate_reply_with_fallback(settings, messages, cookie_id)
 
                 # 11. 保存AI回复到对话记录
                 if self._looks_like_reasoning_reply(reply):

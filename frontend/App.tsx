@@ -8,6 +8,7 @@ import ItemList from './components/ItemList';
 import Settings from './components/Settings';
 import Keywords from './components/Keywords';
 import NotificationChannels from './components/NotificationChannels';
+import AIConfig from './components/AIConfig';
 import { login, verifyToken } from './services/api';
 import { ShieldCheck, ArrowRight, Loader2, Sparkles, User, Lock, KeyRound } from 'lucide-react';
 
@@ -162,6 +163,7 @@ const App: React.FC = () => {
       case 'cards': return <CardList />;
       case 'items': return <ItemList />;
       case 'keywords': return <Keywords />;
+      case 'ai-config': return <AIConfig />;
       case 'notifications': return <NotificationChannels />;
       case 'settings': return <Settings />;
       default: return <Dashboard />;
