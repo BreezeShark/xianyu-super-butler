@@ -397,6 +397,10 @@ export const deleteAIProvider = async (providerId: number): Promise<ApiResponse>
   return del(`/ai-providers/${providerId}`);
 }
 
+export const testAIProvider = async (providerId: number): Promise<ApiResponse & { reply?: string }> => {
+  return post(`/ai-providers/${providerId}/test`, { message: '你好' });
+}
+
 // Notification Channels
 export const getNotificationChannels = async (): Promise<{ success: boolean; data?: any[] }> => {
   const result = await get<any[]>('/notification-channels');

@@ -10,11 +10,12 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Send,
   Trash2,
   X,
   Zap,
 } from 'lucide-react';
-import { createAIProvider, deleteAIProvider, getAIProviders, updateAIProvider } from '../services/api';
+import { createAIProvider, deleteAIProvider, getAIProviders, testAIProvider, updateAIProvider } from '../services/api';
 import { AIProviderConfig } from '../types';
 
 const emptyProvider: AIProviderConfig = {
@@ -44,6 +45,7 @@ const AIConfig: React.FC = () => {
   const [form, setForm] = useState<AIProviderConfig>(emptyProvider);
   const [showKey, setShowKey] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [testingProviderId, setTestingProviderId] = useState<number | null>(null);
 
   const sortedProviders = useMemo(
     () => [...providers].sort((a, b) => (a.priority || 0) - (b.priority || 0) || (a.id || 0) - (b.id || 0)),
@@ -150,6 +152,20 @@ const AIConfig: React.FC = () => {
     }
   };
 
+  const testProvider = async (provider: AIProviderConfig) => {
+    if (!provider.id) return;
+    setTestingProviderId(provider.id);
+    try {
+      const result = await testAIProvider(provider.id);
+      alert(`测试成功\n\n发送：你好\n回复：${result.reply || result.message || '模型已响应'}`);
+    } catch (error) {
+      console.error('测试AI配置失败:', error);
+      alert('测试AI配置失败：' + (error as Error).message);
+    } finally {
+      setTestingProviderId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -219,6 +235,14 @@ const AIConfig: React.FC = () => {
                   </button>
                   <button onClick={() => openEdit(provider)} className="p-2 rounded-xl bg-white hover:bg-gray-100 text-gray-500" title="编辑">
                     <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => testProvider(provider)}
+                    disabled={testingProviderId === provider.id}
+                    className="p-2 rounded-xl bg-white hover:bg-gray-100 text-gray-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                    title="发送“你好”测试模型"
+                  >
+                    {testingProviderId === provider.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </button>
                   <button onClick={() => removeProvider(provider)} className="p-2 rounded-xl bg-white hover:bg-red-50 text-red-500" title="删除">
                     <Trash2 className="w-4 h-4" />

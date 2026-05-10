@@ -385,6 +385,25 @@ class AIReplyEngine:
             raise Exception('OpenAI兼容客户端创建失败')
         return self._call_openai_api(client, settings, messages, max_tokens=512, temperature=0.7)
 
+    def test_provider(self, provider: dict, message: str = '你好') -> str:
+        """测试单个AI供应商配置。"""
+        messages = [
+            {
+                'role': 'system',
+                'content': '你是一个简洁的测试助手。请用中文回复，确认你收到了用户消息。',
+            },
+            {
+                'role': 'user',
+                'content': message or '你好',
+            },
+        ]
+        reply = self._call_provider(provider, messages)
+        if not reply or not reply.strip():
+            raise Exception('AI返回为空')
+        if self._looks_like_reasoning_reply(reply):
+            raise Exception('AI返回疑似推理过程，已拒绝展示')
+        return reply.strip()
+
     def is_ai_enabled(self, cookie_id: str) -> bool:
         """检查指定账号是否启用AI回复"""
         settings = db_manager.get_ai_reply_settings(cookie_id)

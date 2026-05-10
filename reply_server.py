@@ -4618,6 +4618,10 @@ class AIProviderConfig(BaseModel):
     temperature: float = 0.7
 
 
+class AIProviderTestRequest(BaseModel):
+    message: str = "你好"
+
+
 @app.delete("/items/batch")
 def batch_delete_items(
     request: BatchDeleteRequest,
@@ -4706,6 +4710,30 @@ def delete_ai_provider(provider_id: int, _: None = Depends(require_auth)):
     except Exception as e:
         logger.error(f"删除AI供应商配置异常: {e}")
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
+
+
+@app.post("/ai-providers/{provider_id}/test")
+def test_ai_provider(provider_id: int, test_data: AIProviderTestRequest, _: None = Depends(require_auth)):
+    """测试单个AI供应商配置"""
+    try:
+        provider = next(
+            (item for item in db_manager.get_ai_providers(enabled_only=False) if item.get('id') == provider_id),
+            None
+        )
+        if not provider:
+            raise HTTPException(status_code=404, detail="AI供应商不存在")
+
+        reply = ai_reply_engine.test_provider(provider, test_data.message or "你好")
+        return {
+            "success": True,
+            "message": "AI供应商测试成功",
+            "reply": reply
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"测试AI供应商失败 {provider_id}: {e}")
+        raise HTTPException(status_code=400, detail=f"AI供应商测试失败: {str(e)}")
 
 
 @app.get("/ai-reply-settings/{cookie_id}")
