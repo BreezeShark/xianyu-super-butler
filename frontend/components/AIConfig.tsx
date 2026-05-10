@@ -1,5 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, CheckCircle2, Edit2, Eye, EyeOff, Loader2, Plus, RefreshCw, Save, Trash2, Zap } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import {
+  Bot,
+  CheckCircle2,
+  Edit2,
+  Eye,
+  EyeOff,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Save,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
 import { createAIProvider, deleteAIProvider, getAIProviders, updateAIProvider } from '../services/api';
 import { AIProviderConfig } from '../types';
 
@@ -29,6 +43,7 @@ const AIConfig: React.FC = () => {
   const [editing, setEditing] = useState<AIProviderConfig | null>(null);
   const [form, setForm] = useState<AIProviderConfig>(emptyProvider);
   const [showKey, setShowKey] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const sortedProviders = useMemo(
     () => [...providers].sort((a, b) => (a.priority || 0) - (b.priority || 0) || (a.id || 0) - (b.id || 0)),
@@ -51,17 +66,29 @@ const AIConfig: React.FC = () => {
     loadProviders();
   }, []);
 
+  const closeModal = () => {
+    if (saving) return;
+    setShowModal(false);
+    setEditing(null);
+    setForm(emptyProvider);
+    setShowKey(false);
+  };
+
   const openCreate = () => {
-    const nextPriority = sortedProviders.length ? Math.max(...sortedProviders.map((item) => item.priority || 100)) + 10 : 100;
+    const nextPriority = sortedProviders.length
+      ? Math.max(...sortedProviders.map((item) => item.priority || 100)) + 10
+      : 100;
     setEditing(null);
     setForm({ ...emptyProvider, priority: nextPriority });
     setShowKey(false);
+    setShowModal(true);
   };
 
   const openEdit = (provider: AIProviderConfig) => {
     setEditing(provider);
     setForm({ ...provider });
     setShowKey(false);
+    setShowModal(true);
   };
 
   const validateForm = () => {
@@ -91,8 +118,7 @@ const AIConfig: React.FC = () => {
         await createAIProvider(payload);
       }
       await loadProviders();
-      setEditing(null);
-      setForm(emptyProvider);
+      closeModal();
     } catch (error) {
       console.error('保存AI配置失败:', error);
       alert('保存AI配置失败');
@@ -204,78 +230,105 @@ const AIConfig: React.FC = () => {
         )}
       </section>
 
-      <section className="ios-card rounded-[2rem] p-6 bg-white space-y-5">
-        <div>
-          <h3 className="text-xl font-extrabold text-gray-900">{editing ? '编辑AI配置' : '新增AI配置'}</h3>
-          <p className="text-sm text-gray-500 mt-1">OpenAI兼容接口填写服务商给出的 base_url，不需要补 `/chat/completions`。</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">配置名称</label>
-            <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">供应商类型</label>
-            <select value={form.provider_type} onChange={(event) => setForm({ ...form, provider_type: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl">
-              <option value="openai">OpenAI兼容</option>
-              <option value="dashscope">DashScope应用</option>
-              <option value="gemini">Gemini</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">模型</label>
-            <input value={form.model_name} onChange={(event) => setForm({ ...form, model_name: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl font-mono text-sm" placeholder="minimaxai/minimax-m2.7" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">优先级</label>
-            <input type="number" value={form.priority} onChange={(event) => setForm({ ...form, priority: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="1" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-bold text-gray-700 mb-2">API地址</label>
-            <input value={form.base_url} onChange={(event) => setForm({ ...form, base_url: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl font-mono text-sm" placeholder="https://integrate.api.nvidia.com/v1" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-bold text-gray-700 mb-2">API Key</label>
-            <div className="relative">
-              <input type={showKey ? 'text' : 'password'} value={form.api_key} onChange={(event) => setForm({ ...form, api_key: event.target.value })} className="w-full ios-input px-4 py-3 pr-12 rounded-xl font-mono text-sm" />
-              <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600">
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      {showModal && createPortal(
+        <div className="modal-overlay-centered">
+          <div className="modal-container" style={{ maxWidth: '860px' }}>
+            <div className="modal-header flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
+                  <Bot className="w-6 h-6 text-gray-700" />
+                  {editing ? '编辑AI配置' : '新增AI配置'}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">OpenAI兼容接口填写服务商给出的 base_url，不需要补 `/chat/completions`。</p>
+              </div>
+              <button
+                onClick={closeModal}
+                className="w-10 h-10 rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0 inline-flex items-center justify-center"
+                title="关闭"
+              >
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">超时秒数</label>
-            <input type="number" value={form.timeout_seconds} onChange={(event) => setForm({ ...form, timeout_seconds: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="5" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Max Tokens</label>
-            <input type="number" value={form.max_tokens} onChange={(event) => setForm({ ...form, max_tokens: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="64" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Temperature</label>
-            <input type="number" step="0.1" value={form.temperature} onChange={(event) => setForm({ ...form, temperature: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="0" max="2" />
-          </div>
-          <div className="flex items-end">
-            <button type="button" onClick={() => setForm({ ...form, enabled: !form.enabled })} className={`ios-switch ${form.enabled ? 'bg-[#FFE815]' : 'bg-gray-300'}`}>
-              <span className={`ios-switch-thumb ${form.enabled ? 'ios-switch-thumb-on' : ''}`} />
-            </button>
-            <span className="ml-3 text-sm font-bold text-gray-700">{form.enabled ? '启用' : '禁用'}</span>
-          </div>
-        </div>
 
-        <div className="flex justify-end gap-3">
-          {editing && (
-            <button onClick={openCreate} className="px-5 py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200">
-              取消编辑
-            </button>
-          )}
-          <button onClick={saveProvider} disabled={saving} className="ios-btn-primary px-6 py-3 rounded-xl font-bold flex items-center gap-2">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            保存配置
-          </button>
-        </div>
-      </section>
+            <div className="modal-body space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">配置名称</label>
+                  <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">供应商类型</label>
+                  <select value={form.provider_type} onChange={(event) => setForm({ ...form, provider_type: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl">
+                    <option value="openai">OpenAI兼容</option>
+                    <option value="dashscope">DashScope应用</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">模型</label>
+                  <input value={form.model_name} onChange={(event) => setForm({ ...form, model_name: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl font-mono text-sm" placeholder="minimaxai/minimax-m2.7" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">优先级</label>
+                  <input type="number" value={form.priority} onChange={(event) => setForm({ ...form, priority: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="1" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">API地址</label>
+                  <input value={form.base_url} onChange={(event) => setForm({ ...form, base_url: event.target.value })} className="w-full ios-input px-4 py-3 rounded-xl font-mono text-sm" placeholder="https://integrate.api.nvidia.com/v1" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">API Key</label>
+                  <div className="relative">
+                    <input type={showKey ? 'text' : 'password'} value={form.api_key} onChange={(event) => setForm({ ...form, api_key: event.target.value })} className="w-full ios-input px-4 py-3 pr-12 rounded-xl font-mono text-sm" />
+                    <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600">
+                      {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">超时秒数</label>
+                  <input type="number" value={form.timeout_seconds} onChange={(event) => setForm({ ...form, timeout_seconds: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="5" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Max Tokens</label>
+                  <input type="number" value={form.max_tokens} onChange={(event) => setForm({ ...form, max_tokens: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="64" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Temperature</label>
+                  <input type="number" step="0.1" value={form.temperature} onChange={(event) => setForm({ ...form, temperature: Number(event.target.value) })} className="w-full ios-input px-4 py-3 rounded-xl" min="0" max="2" />
+                </div>
+                <div className="flex items-end">
+                  <button type="button" onClick={() => setForm({ ...form, enabled: !form.enabled })} className={`ios-switch ${form.enabled ? 'bg-[#FFE815]' : 'bg-gray-300'}`}>
+                    <span className={`ios-switch-thumb ${form.enabled ? 'ios-switch-thumb-on' : ''}`} />
+                  </button>
+                  <span className="ml-3 text-sm font-bold text-gray-700">{form.enabled ? '启用' : '禁用'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={closeModal}
+                  className="flex-1 px-6 py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                  disabled={saving}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={saveProvider}
+                  disabled={saving}
+                  className="flex-1 ios-btn-primary px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {saving ? '保存中...' : '保存配置'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
