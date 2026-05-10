@@ -528,9 +528,12 @@ const NotificationChannels: React.FC = () => {
                   spellCheck={false}
                 />
                 {form.type === 'feishu' && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    飞书机器人未开启签名校验时，`secret` 留空即可；开启签名校验时填写机器人安全设置里的签名密钥。
-                  </p>
+                  <div className="mt-3 rounded-xl bg-yellow-50 border border-yellow-100 p-4 text-xs text-gray-600 leading-6">
+                    <div className="font-bold text-gray-900 mb-1">飞书配置说明</div>
+                    <p>Webhook URL 来自飞书群的“群设置 - 群机器人 - 自定义机器人”。</p>
+                    <p>如果机器人没有开启签名校验，secret 留空即可。</p>
+                    <p>如果开启了签名校验，secret 填写飞书机器人安全设置里显示的签名密钥。</p>
+                  </div>
                 )}
               </div>
             </div>
