@@ -3574,12 +3574,21 @@ class XianyuLive:
 
             logger.info(f"📱 找到 {len(notifications)} 个通知渠道配置")
 
+            item_title = "未知商品"
+            if item_id:
+                try:
+                    item_info = db_manager.get_item_info(self.cookie_id, item_id)
+                    if item_info and item_info.get('item_title'):
+                        item_title = item_info.get('item_title')
+                except Exception as item_error:
+                    logger.warning(f"📱 获取通知商品名称失败: {self._safe_str(item_error)}")
+
             # 构建通知消息
             notification_title = "🤖 AI回复通知" if ai_reply else "🚨 接收消息通知"
             notification_msg = f"{notification_title}\n\n" \
                              f"账号: {self.cookie_id}\n" \
                              f"买家: {send_user_name} (ID: {send_user_id})\n" \
-                             f"商品ID: {item_id or '未知'}\n" \
+                             f"商品: {item_title}\n" \
                              f"聊天ID: {chat_id or '未知'}\n" \
                              f"消息内容: {send_message}\n" \
                              f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
