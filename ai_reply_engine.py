@@ -36,6 +36,7 @@ class AIReplyEngine:
     
     def _init_default_prompts(self):
         """初始化默认提示词"""
+        final_reply_rule = "\n输出要求：只输出要发给买家的最终回复，不要解释思考过程，不要复述商品信息。"
         self.default_prompts = {
             'classify': '''你是一个意图分类专家...（此提示词已不再被 detect_intent 使用）''',
             
@@ -46,17 +47,17 @@ class AIReplyEngine:
 2. 接近最大议价轮数时要坚持底线，强调商品价值
 3. 优惠不能超过设定的最大百分比和金额
 4. 语气要友好但坚定，突出商品优势
-注意：结合商品信息、对话历史和议价设置，给出合适的回复。''',
+注意：结合商品信息、对话历史和议价设置，给出合适的回复。''' + final_reply_rule,
             
             'tech': '''你是一位技术专家，专业解答产品相关问题。
 语言要求：简短专业，每句≤10字，总字数≤40字。
 回答重点：产品功能、使用方法、注意事项。
-注意：基于商品信息回答，避免过度承诺。''',
+注意：基于商品信息回答，避免过度承诺。''' + final_reply_rule,
             
             'default': '''你是一位资深电商卖家，提供优质客服。
 语言要求：简短友好，每句≤10字，总字数≤40字。
 回答重点：商品介绍、物流、售后等常见问题。
-注意：结合商品信息，给出实用建议。'''
+注意：结合商品信息，给出实用建议。''' + final_reply_rule
         }
     
     def _create_openai_client(self, cookie_id: str) -> Optional[OpenAI]:
@@ -114,7 +115,7 @@ class AIReplyEngine:
             if reply_text:
                 return reply_text
 
-        for attr in ('reasoning_content', 'reasoning', 'text'):
+        for attr in ('text',):
             text = getattr(message, attr, None)
             if isinstance(text, str) and text.strip():
                 return text.strip()
@@ -125,6 +126,23 @@ class AIReplyEngine:
         response_data = response.model_dump() if hasattr(response, 'model_dump') else str(response)
         logger.error(f"OpenAI兼容API响应中没有可用回复文本: {response_data}")
         raise Exception('OpenAI兼容API响应中没有可用回复文本')
+
+    def _looks_like_reasoning_reply(self, reply: str) -> bool:
+        """识别不应发送给买家的分析过程。"""
+        if not reply:
+            return True
+        markers = [
+            '用户问',
+            '我需要',
+            '从商品信息',
+            '根据商品描述',
+            '商品标题和描述',
+            '这说明',
+            '我的回复',
+            '最终回复',
+            '分析',
+        ]
+        return len(reply) > 80 and any(marker in reply for marker in markers)
 
     def _is_gemini_api(self, settings: dict) -> bool:
         """判断是否为Gemini API (通过模型名称)"""
@@ -455,9 +473,13 @@ class AIReplyEngine:
                     if not client:
                         return None
                     logger.info(f"messages:{messages}")
-                    reply = self._call_openai_api(client, settings, messages, max_tokens=100, temperature=0.7)
+                    reply = self._call_openai_api(client, settings, messages, max_tokens=512, temperature=0.7)
 
                 # 11. 保存AI回复到对话记录
+                if self._looks_like_reasoning_reply(reply):
+                    logger.error(f"AI返回疑似推理过程，已拦截不发送 (账号: {cookie_id}): {reply}")
+                    return None
+
                 self.save_conversation(chat_id, cookie_id, user_id, item_id, "assistant", reply, intent)
 
                 # 12. 更新议价次数 (此方法已在 get_bargain_count 中通过 SQL COUNT(*) 隐式实现)
