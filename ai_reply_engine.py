@@ -92,6 +92,40 @@ class AIReplyEngine:
 
         return is_custom_model and is_dashscope_url
 
+    def _extract_openai_reply_text(self, response) -> str:
+        """从 OpenAI 兼容响应中提取回复文本，兼容不同厂商的返回结构。"""
+        choice = response.choices[0]
+        message = choice.message
+        content = getattr(message, 'content', None)
+
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get('text') or item.get('content')
+                else:
+                    text = getattr(item, 'text', None) or getattr(item, 'content', None)
+                if text:
+                    parts.append(str(text))
+            reply_text = ''.join(parts).strip()
+            if reply_text:
+                return reply_text
+
+        for attr in ('reasoning_content', 'reasoning', 'text'):
+            text = getattr(message, attr, None)
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+
+        if hasattr(choice, 'text') and isinstance(choice.text, str) and choice.text.strip():
+            return choice.text.strip()
+
+        response_data = response.model_dump() if hasattr(response, 'model_dump') else str(response)
+        logger.error(f"OpenAI兼容API响应中没有可用回复文本: {response_data}")
+        raise Exception('OpenAI兼容API响应中没有可用回复文本')
+
     def _is_gemini_api(self, settings: dict) -> bool:
         """判断是否为Gemini API (通过模型名称)"""
         model_name = settings.get('model_name', '').lower()
@@ -229,7 +263,7 @@ class AIReplyEngine:
                 max_tokens=max_tokens,
                 temperature=temperature
             )
-            return response.choices[0].message.content.strip()
+            return self._extract_openai_reply_text(response)
         except Exception as e:
             logger.error(f"OpenAI API调用失败: {e}")
             # 如果有详细的错误信息，打印出来
